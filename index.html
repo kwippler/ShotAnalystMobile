@@ -148,16 +148,19 @@
         </div>
     </main>
 
+    <!-- Normal bottom mode bar (hidden when wizard active) -->
     <nav id="mode-bar" class="bg-white border-t border-zinc-200 px-2 py-2 shrink-0 overflow-x-auto flex gap-1 no-cursor">
         <button id="mode-crop" onclick="app.setMode('crop')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Zuschnitt</button>
         <button id="mode-scale" onclick="app.setMode('scale')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Skalierung</button>
         <button id="mode-poa" onclick="app.setMode('poa')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Haltepunkt</button>
         <button id="mode-hit" onclick="app.setMode('hit')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-red-200 bg-red-50 text-red-600 whitespace-nowrap">Treffer</button>
         <button id="mode-adjust" onclick="app.setMode('adjust')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Justieren</button>
+        <button id="mode-remove" onclick="app.setMode('remove')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">✕ Löschen</button>
         <button onclick="app.undo()" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">↩</button>
         <button onclick="app.addGroup()" class="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-red-600 text-white rounded-full text-xl font-bold shadow">+</button>
     </nav>
 
+    <!-- Wizard bar -->
     <div id="wizard-bar" class="wizard-bar hidden flex items-center justify-between gap-2">
         <button id="wiz-back" class="text-xs font-bold px-3 py-2 rounded-full border border-zinc-300 bg-white text-zinc-700 disabled:opacity-30">← Zurück</button>
         <div class="flex-1 text-center text-xs font-semibold text-zinc-800" id="wiz-text"></div>
@@ -167,6 +170,7 @@
         </div>
     </div>
 
+    <!-- Slide-up settings panel -->
     <div class="backdrop" id="backdrop"></div>
     <div class="slide-up-panel" id="settingsPanel">
         <div class="flex justify-between items-center mb-4">
@@ -213,6 +217,7 @@
         </section>
     </div>
 
+    <!-- Result view -->
     <div id="view-result" class="hidden fixed inset-0 bg-white flex flex-col items-center justify-center z-300 p-2">
         <div class="absolute top-4 left-4 z-10">
             <button onclick="app.toggleView()" class="bg-zinc-800 text-white px-4 py-2 rounded-full text-sm font-bold">← Zurück</button>
@@ -285,7 +290,6 @@
                     this.loupeCtx = this.loupeCanvas.getContext('2d');
                     this.loupeZoom = 2.5;
 
-                    // Wizard steps – poa inserted after scale
                     this.wizardActive = !this.croppedImg;
                     this.wizardStep = 1;
                     this.wizardSteps = ["open", "crop", "scale", "poa", "shots", "adjust", "analysis"];
@@ -539,6 +543,14 @@
                     } else if (this.mode === 'adjust' && !ag.isVirtual) {
                         const hit = ag.hits.find(h => Math.hypot(h.x - x, h.y - y) < 20);
                         if (hit) this.draggingHit = hit;
+                    } else if (this.mode === 'remove' && !ag.isVirtual) {
+                        // Find hit under finger
+                        const hitIndex = ag.hits.findIndex(h => Math.hypot(h.x - x, h.y - y) < 20);
+                        if (hitIndex !== -1) {
+                            ag.hits.splice(hitIndex, 1);
+                            this.renderUI();
+                            this.draw();
+                        }
                     }
                     this.draw();
                 }
@@ -941,7 +953,6 @@
                         this.ctx.restore();
                     }
                     if (this.mode === 'poa' && this.poaPreview && !activeG.isVirtual) {
-                        // Circular outline for aiming point during definition
                         this.ctx.save();
                         this.ctx.globalAlpha = 0.7;
                         this.ctx.strokeStyle = '#15803d';
