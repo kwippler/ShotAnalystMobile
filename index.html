@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ShotAnalyst v1.2 – Mobile</title>
+    <title>ShotAnalyst Mobile v1.20</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -85,7 +85,7 @@
 <body class="h-dvh flex flex-col bg-white">
 
     <header class="flex items-center justify-between px-3 py-2 border-b border-zinc-200 bg-white shrink-0">
-        <h1 class="text-red-600 font-bold text-lg tracking-tight">ShotAnalyst <span class="text-zinc-400 font-light text-sm">v1.1 Mobile</span></h1>
+        <h1 class="text-red-600 font-bold text-lg tracking-tight">ShotAnalyst <span class="text-zinc-400 font-light text-sm">Mobile v1.20</span></h1>
         <button id="menuBtn" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-zinc-100 transition">
             <svg class="w-6 h-6 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
@@ -683,7 +683,7 @@
 
                 saveSession() {
                     this.groups.forEach(g => { if (g) delete g.scaleConfirmed; });
-                    const data = { version: "6.48", timestamp: Date.now(), distance: document.getElementById('distance').value, refMm: document.getElementById('refMm').value, caliber: document.getElementById('caliber').value, groups: this.groups };
+                    const data = { version: "1.20", timestamp: Date.now(), distance: document.getElementById('distance').value, refMm: document.getElementById('refMm').value, caliber: document.getElementById('caliber').value, groups: this.groups };
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ShotAnalyst_Export.json`; a.click();
                     this.groups.forEach(g => { g.scaleConfirmed = g.scaleConfirmed || false; });
@@ -841,7 +841,33 @@
                     this.groups.forEach(g => { g.active = false; g.selected = false; });
                     this.groups.push(virtualGroup);
                     document.getElementById('merge-confirm').classList.add('hidden');
-                    this.draw(); this.renderUI();
+                    // Clear the image canvas and switch to result view
+                    this.originalImg = null;
+                    this.croppedImg = null;
+                    this.imageHistory = [];
+                    this.cropRect = null;
+                    this.cropStart = null;
+                    this.draggingHit = null;
+                    this.hitPreview = null;
+                    this.scalePreview = null;
+                    this.poaPreview = null;
+                    this.resizeCanvas();
+                    this.draw();
+                    // Stop wizard if active
+                    if (this.wizardActive) {
+                        this.stopWizard();
+                    }
+                    // Hide mode bar
+                    document.getElementById('mode-bar').classList.add('hidden');
+                    // Show result view
+                    if (this.viewMode !== 'result') {
+                        this.toggleView();
+                    } else {
+                        this.drawResult();
+                    }
+                    // Close hamburger menu
+                    closeSettings();
+                    this.renderUI();
                 }
                 calculateStats(hits, group) {
                     if (!hits || hits.length < 2) return null;
@@ -1056,7 +1082,7 @@
                     ctx.fillStyle = '#000000'; ctx.font = 'bold 11px Inter'; ctx.fillText("LEGENDE", sx + 15, sy + 360);
                     const leg = [ { t: "Haltepunkt (POA)", c: "#166534", l: false }, { t: "Schwerpunkt (POI)", c: "#0e7490", l: false }, { t: "R50 (Streukreis)", c: "#0e7490", l: true }, { t: "R95 (Streukreis)", c: "#991b1b", l: true } ];
                     leg.forEach((item, i) => { const ly = sy + 385 + (i * 25); ctx.strokeStyle = item.c; ctx.lineWidth = 2; if(item.l) { ctx.setLineDash([4,2]); ctx.beginPath(); ctx.moveTo(sx+15, ly); ctx.lineTo(sx+35, ly); ctx.stroke(); ctx.setLineDash([]); } else { ctx.beginPath(); ctx.arc(sx+25, ly, 3, 0, Math.PI*2); ctx.stroke(); } ctx.fillStyle = '#52525b'; ctx.font = '9px Inter'; ctx.fillText(item.t, sx + 45, ly + 3); });
-                    ctx.fillStyle = '#a1a1aa'; ctx.font = '9px Inter'; ctx.fillText(`v6.48 | Gitter: 10mm | Zoom: ${this.resultZoom.toFixed(1)}`, sx + 15, sy + 625);
+                    ctx.fillStyle = '#a1a1aa'; ctx.font = '9px Inter'; ctx.fillText(`v1.20 | Gitter: 10mm | Zoom: ${this.resultZoom.toFixed(1)}`, sx + 15, sy + 625);
                     ctx.restore();
                 }
                 savePlot() { if (this.viewMode !== 'result') this.toggleView(); const a = document.createElement('a'); a.download = `Bericht_${this.activeGroup.name}.png`; a.href = this.resCanvas.toDataURL("image/png"); a.click(); }
