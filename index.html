@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ShotAnalyst v6.48 – Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f4f4f5;
+            margin: 0;
+            padding: 0;
+            touch-action: manipulation;
+            overscroll-behavior: none;
+        }
+        canvas {
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .no-cursor { cursor: default; }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .slide-up-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            max-height: 80vh;
+            background: white;
+            border-radius: 1rem 1rem 0 0;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 200;
+            overflow-y: auto;
+            padding: 1rem 1rem 2rem;
+        }
+        .slide-up-panel.open { transform: translateY(0); }
+        .backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 150;
+            display: none;
+        }
+        .backdrop.active { display: block; }
+        #loupe {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 2px solid rgba(0,0,0,0.5);
+            box-shadow: 0 0 0 2px white, 0 2px 8px rgba(0,0,0,0.3);
+            pointer-events: none;
+            z-index: 50;
+            display: none;
+            background: white;
+            transform: translate(-50%, -50%);
+        }
+        #loupe canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .wizard-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #e4e4e7;
+            padding: 0.75rem 1rem;
+            z-index: 150;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body class="h-dvh flex flex-col bg-white">
+
+    <header class="flex items-center justify-between px-3 py-2 border-b border-zinc-200 bg-white shrink-0">
+        <h1 class="text-red-600 font-bold text-lg tracking-tight">ShotAnalyst <span class="text-zinc-400 font-light text-sm">v6.48</span></h1>
+        <button id="menuBtn" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-zinc-100 transition">
+            <svg class="w-6 h-6 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+    </header>
+
+    <main class="flex-1 relative bg-zinc-100 overflow-hidden">
+        <div id="canvas-container" class="absolute inset-0 flex items-center justify-center">
+            <canvas id="analysis-canvas" class="shadow-md"></canvas>
+            
+            <div id="merge-confirm" class="absolute inset-0 bg-black/30 backdrop-blur-sm hidden flex items-center justify-center z-[100]">
+                <div class="bg-white border border-zinc-300 p-6 rounded-lg shadow-2xl max-w-xs text-center mx-4">
+                    <h3 class="text-red-600 font-bold mb-2 uppercase text-sm">Verbundgruppe generieren</h3>
+                    <p id="merge-msg" class="text-xs text-zinc-600 mb-6"></p>
+                    <div class="flex gap-2 justify-center" id="merge-actions"></div>
+                </div>
+            </div>
+
+            <div id="preload-modal" class="absolute inset-0 bg-black/30 backdrop-blur-sm hidden flex items-center justify-center z-[120]">
+                <div class="bg-white border border-zinc-300 p-6 rounded-lg shadow-2xl max-w-xs text-center mx-4">
+                    <h3 class="text-red-600 font-bold mb-2 uppercase text-sm">Bildparameter</h3>
+                    <p class="text-xs text-zinc-600 mb-4">Geben Sie Distanz und Kaliber an:</p>
+                    <div class="mb-4">
+                        <label class="text-xs text-zinc-500 block mb-1">Distanz (m)</label>
+                        <input type="number" id="preload-distance" value="100" class="w-full border border-zinc-300 rounded p-2 text-sm outline-none focus:border-red-500">
+                    </div>
+                    <div class="mb-4">
+                        <label class="text-xs text-zinc-500 block mb-1">Geschoss-Ø (mm)</label>
+                        <input type="number" id="preload-caliber" value="5.56" step="0.01" class="w-full border border-zinc-300 rounded p-2 text-sm outline-none focus:border-red-500">
+                    </div>
+                    <div class="flex gap-2 justify-center">
+                        <button onclick="app.confirmPreload()" class="bg-red-600 text-white px-4 py-2 text-xs font-bold rounded">OK</button>
+                        <button onclick="app.cancelPreload()" class="bg-zinc-200 text-zinc-700 px-4 py-2 text-xs font-bold rounded">Abbrechen</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="scale-confirm" class="absolute inset-0 bg-black/30 backdrop-blur-sm hidden flex items-center justify-center z-[110]">
+                <div class="bg-white border border-zinc-300 p-6 rounded-lg shadow-2xl max-w-xs text-center mx-4">
+                    <h3 class="text-red-600 font-bold mb-2 uppercase text-sm">Referenzstrecke</h3>
+                    <p class="text-xs text-zinc-600 mb-4">Geben Sie die Länge der markierten Strecke in mm ein:</p>
+                    <input type="number" id="scale-dist-input" class="w-full border border-zinc-300 rounded p-2 text-sm outline-none focus:border-red-500 mb-4" step="any" min="0.1">
+                    <div class="flex gap-2 justify-center">
+                        <button onclick="app.confirmScale()" class="bg-red-600 text-white px-4 py-2 text-xs font-bold rounded">Bestätigen</button>
+                        <button onclick="app.cancelScale()" class="bg-zinc-200 text-zinc-700 px-4 py-2 text-xs font-bold rounded">Abbrechen</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loupe">
+                <canvas id="loupe-canvas" width="200" height="200"></canvas>
+            </div>
+        </div>
+
+        <div id="stats-panel" class="absolute top-4 right-4 bg-white/95 border border-zinc-300 p-3 rounded-lg shadow-lg backdrop-blur-md hidden select-none z-40 text-zinc-900 max-w-[220px] text-[11px]" style="cursor: grab;">
+            <div class="flex justify-between items-center border-b border-zinc-200 pb-2 mb-2">
+                <h3 class="text-xs font-bold text-red-600 uppercase tracking-wider">Statistik</h3>
+                <button onclick="document.getElementById('stats-panel').classList.add('hidden')" class="text-zinc-400 hover:text-red-600 text-lg leading-none">&times;</button>
+            </div>
+            <div id="stats-content" class="space-y-1.5 font-medium"></div>
+        </div>
+    </main>
+
+    <nav id="mode-bar" class="bg-white border-t border-zinc-200 px-2 py-2 shrink-0 overflow-x-auto flex gap-1 no-cursor">
+        <button id="mode-crop" onclick="app.setMode('crop')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Zuschnitt</button>
+        <button id="mode-scale" onclick="app.setMode('scale')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Skalierung</button>
+        <button id="mode-poa" onclick="app.setMode('poa')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Haltepunkt</button>
+        <button id="mode-hit" onclick="app.setMode('hit')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-red-200 bg-red-50 text-red-600 whitespace-nowrap">Treffer</button>
+        <button id="mode-adjust" onclick="app.setMode('adjust')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Justieren</button>
+        <button onclick="app.undo()" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">↩</button>
+        <button onclick="app.addGroup()" class="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-red-600 text-white rounded-full text-xl font-bold shadow">+</button>
+    </nav>
+
+    <div id="wizard-bar" class="wizard-bar hidden flex items-center justify-between gap-2">
+        <button id="wiz-back" class="text-xs font-bold px-3 py-2 rounded-full border border-zinc-300 bg-white text-zinc-700 disabled:opacity-30">← Zurück</button>
+        <div class="flex-1 text-center text-xs font-semibold text-zinc-800" id="wiz-text"></div>
+        <div id="wiz-action-area" class="flex gap-2">
+            <button id="wiz-load-btn" class="hidden text-xs font-bold px-3 py-2 rounded-full bg-red-600 text-white">Bild importieren</button>
+            <button id="wiz-next" class="text-xs font-bold px-3 py-2 rounded-full bg-red-600 text-white">Weiter →</button>
+        </div>
+    </div>
+
+    <div class="backdrop" id="backdrop"></div>
+    <div class="slide-up-panel" id="settingsPanel">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold text-zinc-800">Einstellungen & Daten</h2>
+            <button onclick="closeSettings()" class="text-zinc-500 hover:text-red-600 text-2xl leading-none">&times;</button>
+        </div>
+        <section class="mb-4">
+            <h3 class="text-sm font-semibold text-zinc-500 uppercase mb-2">Sitzung</h3>
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="app.saveSession()" class="bg-white hover:bg-zinc-100 text-zinc-700 text-xs py-2 rounded border border-zinc-300 font-bold">Speichern</button>
+                <button onclick="document.getElementById('sessionLoadInput').click()" class="bg-white hover:bg-zinc-100 text-zinc-700 text-xs py-2 rounded border border-zinc-300 font-bold">Laden</button>
+                <input type="file" id="sessionLoadInput" class="hidden" accept=".json" onchange="app.loadSession(this)">
+            </div>
+        </section>
+        <section class="mb-4">
+            <h3 class="text-sm font-semibold text-zinc-500 uppercase mb-2">Bild & Parameter</h3>
+            <button onclick="app.requestImageLoad()" class="w-full bg-white hover:bg-zinc-100 text-zinc-700 text-sm py-2 rounded border border-zinc-300 font-bold mb-2">Bild importieren</button>
+            <input type="file" id="fileInput" class="hidden" accept="image/*">
+            <div class="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                    <label class="text-[10px] text-zinc-500 uppercase">Distanz (m)</label>
+                    <input type="number" id="distance" value="100" class="w-full bg-white border border-zinc-300 rounded p-2 text-sm outline-none focus:border-red-500">
+                </div>
+                <div>
+                    <label class="text-[10px] text-zinc-500 uppercase">Referenz (mm)</label>
+                    <input type="number" id="refMm" value="20" class="w-full bg-white border border-zinc-300 rounded p-2 text-sm outline-none focus:border-red-500">
+                </div>
+            </div>
+            <div>
+                <label class="text-[10px] text-zinc-500 uppercase">Geschoss-Ø (mm)</label>
+                <input type="number" id="caliber" value="5.56" step="0.01" class="w-full bg-white border border-zinc-300 rounded p-2 text-sm outline-none focus:border-red-500">
+            </div>
+            <button onclick="app.resetCrop()" class="w-full mt-2 text-xs py-2 rounded bg-white border border-zinc-300 text-zinc-700 font-bold">Originalbild wiederherstellen</button>
+        </section>
+        <section class="mb-4">
+            <h3 class="text-sm font-semibold text-zinc-500 uppercase mb-2">Gruppenverwaltung</h3>
+            <div id="groupList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+            <button onclick="app.requestMerge()" id="mergeBtn" class="mt-2 w-full border border-red-300 bg-red-50 text-xs py-2 rounded text-red-600 font-bold hidden">Verbund generieren</button>
+        </section>
+        <section class="grid grid-cols-2 gap-2 mb-4">
+            <button id="toggleViewBtn" onclick="app.toggleView()" class="bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold py-3 rounded">Analysebericht</button>
+            <button onclick="app.exportCSV()" class="bg-white hover:bg-zinc-100 text-zinc-700 text-xs py-3 rounded border border-zinc-300 font-bold">CSV Export</button>
+            <button onclick="app.savePlot()" class="col-span-2 bg-red-600 hover:bg-red-700 text-white text-sm py-3 rounded font-bold uppercase">Bericht speichern</button>
+        </section>
+    </div>
+
+    <div id="view-result" class="hidden fixed inset-0 bg-white flex flex-col items-center justify-center z-300 p-2">
+        <div class="absolute top-4 left-4 z-10">
+            <button onclick="app.toggleView()" class="bg-zinc-800 text-white px-4 py-2 rounded-full text-sm font-bold">← Zurück</button>
+        </div>
+        <div class="relative w-full max-w-[500px] aspect-square bg-white border border-zinc-200 rounded-lg shadow-inner flex items-center justify-center overflow-hidden">
+            <canvas id="result-canvas" width="850" height="850" class="w-full h-full object-contain"></canvas>
+        </div>
+        <div class="absolute bottom-8 left-1/2 -translate-x-1/2 w-64 bg-white/95 border border-zinc-300 p-3 rounded-lg backdrop-blur-sm flex flex-col gap-2 z-50 shadow-md">
+            <div class="flex justify-between text-[10px] uppercase text-zinc-600 font-bold">
+                <span>Skalierung</span>
+                <span id="zoom-val">2.0</span>
+            </div>
+            <input type="range" id="result-zoom" min="0.5" max="8" step="0.1" value="2" class="w-full" oninput="app.updateZoom(this.value)">
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            window.closeSettings = function() {
+                document.getElementById('settingsPanel').classList.remove('open');
+                document.getElementById('backdrop').classList.remove('active');
+            };
+            window.openSettings = function() {
+                document.getElementById('settingsPanel').classList.add('open');
+                document.getElementById('backdrop').classList.add('active');
+            };
+            document.getElementById('menuBtn').addEventListener('click', openSettings);
+            document.getElementById('backdrop').addEventListener('click', closeSettings);
+
+            class ShotAnalyst {
+                constructor() {
+                    this.canvas = document.getElementById('analysis-canvas');
+                    this.resCanvas = document.getElementById('result-canvas');
+                    this.ctx = this.canvas.getContext('2d');
+                    this.resCtx = this.resCanvas.getContext('2d');
+                    this.originalImg = null;
+                    this.croppedImg = null;
+                    this.viewMode = 'analysis';
+                    this.currentContextId = Date.now();
+                    this.groups = [{
+                        id: Date.now(),
+                        contextId: this.currentContextId,
+                        name: "Gruppe 1",
+                        hits: [],
+                        poa: null,
+                        active: true,
+                        selected: false,
+                        isVirtual: false,
+                        scale: { p1: null, p2: null },
+                        scaleConfirmed: false
+                    }];
+                    this.imageHistory = [];
+                    this.mode = 'hit';
+                    this.draggingHit = null;
+                    this.cropStart = null;
+                    this.cropRect = null;
+                    this.resultZoom = 2.0;
+                    this.isDraggingStats = false;
+                    this.statsPanel = document.getElementById('stats-panel');
+                    this.dragOffset = { x: 0, y: 0 };
+                    this.pointerId = null;
+                    this.isPointerDown = false;
+                    this.hitPreview = null;
+                    this.scalePreview = null;
+                    this.poaPreview = null;
+                    this.lastPointerCoords = null;
+
+                    this.loupe = document.getElementById('loupe');
+                    this.loupeCanvas = document.getElementById('loupe-canvas');
+                    this.loupeCtx = this.loupeCanvas.getContext('2d');
+                    this.loupeZoom = 2.5;
+
+                    // Wizard steps – poa inserted after scale
+                    this.wizardActive = !this.croppedImg;
+                    this.wizardStep = 1;
+                    this.wizardSteps = ["open", "crop", "scale", "poa", "shots", "adjust", "analysis"];
+
+                    this.initEventListeners();
+                    this.renderUI();
+                    if (this.wizardActive) this.startWizard();
+                }
+
+                get activeGroup() { return this.groups.find(g => g.active); }
+
+                getGroupMmp(group) {
+                    if (!group || !group.scale || !group.scale.p1 || !group.scale.p2) return null;
+                    const pixDist = Math.hypot(group.scale.p1.x - group.scale.p2.x, group.scale.p1.y - group.scale.p2.y);
+                    if (pixDist === 0) return null;
+                    return (parseFloat(document.getElementById('refMm').value) || 20) / pixDist;
+                }
+
+                requestImageLoad() {
+                    document.getElementById('preload-modal').classList.remove('hidden');
+                    document.getElementById('preload-distance').value = document.getElementById('distance').value;
+                    document.getElementById('preload-caliber').value = document.getElementById('caliber').value;
+                }
+
+                confirmPreload() {
+                    const dist = parseFloat(document.getElementById('preload-distance').value);
+                    const cal = parseFloat(document.getElementById('preload-caliber').value);
+                    if (isNaN(dist) || dist <= 0 || isNaN(cal) || cal <= 0) {
+                        alert('Bitte gültige Werte eingeben.');
+                        return;
+                    }
+                    document.getElementById('distance').value = dist;
+                    document.getElementById('caliber').value = cal;
+                    document.getElementById('preload-modal').classList.add('hidden');
+                    document.getElementById('fileInput').click();
+                }
+
+                cancelPreload() {
+                    document.getElementById('preload-modal').classList.add('hidden');
+                }
+
+                startWizard() {
+                    this.wizardActive = true;
+                    this.wizardStep = this.croppedImg ? 2 : 1;
+                    this.activeGroup.scaleConfirmed = false;
+                    this.setModeForStep(this.wizardStep);
+                    this.updateWizardUI();
+                    document.getElementById('mode-bar').classList.add('hidden');
+                    document.getElementById('wizard-bar').classList.remove('hidden');
+                }
+
+                stopWizard() {
+                    this.wizardActive = false;
+                    document.getElementById('wizard-bar').classList.add('hidden');
+                    document.getElementById('mode-bar').classList.remove('hidden');
+                }
+
+                isStepComplete(step) {
+                    const stepName = this.wizardSteps[step - 1];
+                    const ag = this.activeGroup;
+                    switch (stepName) {
+                        case 'open': return !!this.croppedImg;
+                        case 'crop': return true;
+                        case 'scale': return ag && ag.scale && ag.scale.p2 != null && ag.scaleConfirmed === true;
+                        case 'poa': return ag && ag.poa != null;
+                        case 'shots': return ag && ag.hits.length >= 3;
+                        case 'adjust': return true;
+                        case 'analysis': return true;
+                        default: return false;
+                    }
+                }
+
+                setModeForStep(step) {
+                    const stepName = this.wizardSteps[step - 1];
+                    this.mode = (stepName === 'crop') ? 'crop' :
+                               (stepName === 'scale') ? 'scale' :
+                               (stepName === 'poa') ? 'poa' :
+                               (stepName === 'shots') ? 'hit' :
+                               (stepName === 'adjust') ? 'adjust' : 'hit';
+                    this.scalePreview = null;
+                    this.poaPreview = null;
+                    this.hitPreview = null;
+                    if (stepName === 'scale') {
+                        const ag = this.activeGroup;
+                        if (ag) {
+                            ag.scale = { p1: null, p2: null };
+                            ag.scaleConfirmed = false;
+                        }
+                    }
+                    this.draw();
+                }
+
+                updateWizardUI() {
+                    const textEl = document.getElementById('wiz-text');
+                    const backBtn = document.getElementById('wiz-back');
+                    const nextBtn = document.getElementById('wiz-next');
+                    const loadBtn = document.getElementById('wiz-load-btn');
+                    const step = this.wizardStep;
+                    const total = this.wizardSteps.length;
+                    const stepName = this.wizardSteps[step - 1];
+
+                    let instruction = '';
+                    let statusHint = '';
+                    const ag = this.activeGroup;
+                    switch (stepName) {
+                        case 'open': instruction = 'Laden Sie ein Zielfoto.'; break;
+                        case 'crop': instruction = 'Optional: Bild zuschneiden (ziehen).'; break;
+                        case 'scale':
+                            instruction = 'Setzen Sie zwei Punkte für die Referenzstrecke.';
+                            if (ag?.scale?.p1 && ag?.scale?.p2) {
+                                if (!ag.scaleConfirmed) statusHint = 'Geben Sie die Distanz ein.';
+                                else statusHint = 'Skalierung bestätigt.';
+                            } else if (ag?.scale?.p1 && !ag?.scale?.p2) {
+                                statusHint = '1 Punkt gesetzt.';
+                            }
+                            break;
+                        case 'poa':
+                            instruction = 'Setzen Sie den Haltepunkt (POA).';
+                            if (ag?.poa) statusHint = 'Haltepunkt gesetzt.';
+                            break;
+                        case 'shots':
+                            instruction = 'Tippen Sie mindestens 3 Treffer. Doppeltipp für Schnellauswahl.';
+                            const hitsCount = ag?.hits.length || 0;
+                            if (hitsCount > 0) statusHint = `${hitsCount} Treffer gesetzt.`;
+                            if (hitsCount < 3) statusHint += ' Noch mind. ' + (3 - hitsCount) + ' nötig.';
+                            break;
+                        case 'adjust': instruction = 'Verschieben Sie Treffer bei Bedarf. Ziehen zum Korrigieren.'; break;
+                        case 'analysis': instruction = 'Analyse abgeschlossen. Bericht anzeigen.'; break;
+                    }
+
+                    textEl.innerHTML = `Schritt ${step}/${total}<br><span class="text-[10px] text-zinc-500 font-normal">${instruction} ${statusHint ? '<br><span class="text-red-600 font-bold">' + statusHint + '</span>' : ''}</span>`;
+
+                    if (stepName === 'open') {
+                        nextBtn.classList.add('hidden');
+                        loadBtn.classList.remove('hidden');
+                    } else {
+                        nextBtn.classList.remove('hidden');
+                        loadBtn.classList.add('hidden');
+                    }
+
+                    backBtn.disabled = (step === 1);
+                    const complete = this.isStepComplete(step);
+                    nextBtn.disabled = (step === total) ? false : !complete;
+                    nextBtn.textContent = (step === total) ? 'Fertig' : 'Weiter →';
+                }
+
+                nextStep() {
+                    if (!this.isStepComplete(this.wizardStep)) return;
+                    if (this.wizardStep < this.wizardSteps.length) {
+                        this.wizardStep++;
+                        this.setModeForStep(this.wizardStep);
+                        this.updateWizardUI();
+                        if (this.wizardStep === this.wizardSteps.length) {
+                            this.toggleView();
+                        }
+                    } else {
+                        this.stopWizard();
+                    }
+                }
+
+                prevStep() {
+                    if (this.wizardStep > 1) {
+                        this.wizardStep--;
+                        this.setModeForStep(this.wizardStep);
+                        this.updateWizardUI();
+                        if (this.viewMode === 'result') this.toggleView();
+                    }
+                }
+
+                setMode(m) {
+                    if (this.wizardActive) return;
+                    this.mode = m;
+                    this.scalePreview = null;
+                    this.poaPreview = null;
+                    this.hitPreview = null;
+                    document.querySelectorAll('#mode-bar [id^="mode-"]').forEach(b => {
+                        b.classList.remove('bg-red-50', 'border-red-200', 'text-red-600');
+                        b.classList.add('bg-white', 'border-zinc-300', 'text-zinc-700');
+                    });
+                    const activeBtn = document.getElementById(`mode-${m}`);
+                    if (activeBtn) {
+                        activeBtn.classList.remove('bg-white', 'border-zinc-300', 'text-zinc-700');
+                        activeBtn.classList.add('bg-red-50', 'border-red-200', 'text-red-600');
+                    }
+                    this.draw();
+                }
+
+                confirmScale() {
+                    const input = document.getElementById('scale-dist-input');
+                    const val = parseFloat(input.value);
+                    if (isNaN(val) || val <= 0) {
+                        alert('Bitte geben Sie eine gültige Distanz in mm ein.');
+                        return;
+                    }
+                    document.getElementById('refMm').value = val;
+                    const ag = this.activeGroup;
+                    if (ag) ag.scaleConfirmed = true;
+                    document.getElementById('scale-confirm').classList.add('hidden');
+                    if (this.wizardActive) this.updateWizardUI();
+                    this.draw();
+                }
+
+                cancelScale() {
+                    const ag = this.activeGroup;
+                    if (ag) {
+                        ag.scale.p2 = null;
+                        ag.scaleConfirmed = false;
+                    }
+                    document.getElementById('scale-confirm').classList.add('hidden');
+                    this.draw();
+                    if (this.wizardActive) this.updateWizardUI();
+                }
+
+                initEventListeners() {
+                    document.getElementById('fileInput').addEventListener('change', (e) => this.loadImage(e));
+                    document.getElementById('wiz-load-btn').addEventListener('click', () => this.requestImageLoad());
+                    document.getElementById('wiz-next').addEventListener('click', () => this.nextStep());
+                    document.getElementById('wiz-back').addEventListener('click', () => this.prevStep());
+                    this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+                    this.canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
+                    this.canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
+                    this.canvas.addEventListener('pointerleave', () => this.onPointerLeave());
+                    this.canvas.addEventListener('dblclick', (e) => this.onDblClick(e));
+                    window.addEventListener('resize', () => { this.resizeCanvas(); this.draw(); });
+                    this.statsPanel.addEventListener('pointerdown', (e) => this.startStatsDrag(e));
+                    document.addEventListener('pointermove', (e) => this.doStatsDrag(e));
+                    document.addEventListener('pointerup', () => this.stopStatsDrag());
+                }
+
+                getCanvasCoords(e) { const rect = this.canvas.getBoundingClientRect(); return { x: e.clientX - rect.left, y: e.clientY - rect.top }; }
+
+                onPointerDown(e) {
+                    if (!this.croppedImg || this.viewMode === 'result') return;
+                    e.preventDefault();
+                    this.canvas.setPointerCapture(e.pointerId);
+                    this.pointerId = e.pointerId;
+                    this.isPointerDown = true;
+                    const { x, y } = this.getCanvasCoords(e);
+                    this.lastPointerCoords = { x, y };
+                    const ag = this.activeGroup;
+                    if (!ag) return;
+
+                    if (this.mode === 'crop') {
+                        this.cropStart = { x, y };
+                    } else if (this.mode === 'scale') {
+                        this.scalePreview = { x, y };
+                    } else if (this.mode === 'poa') {
+                        this.poaPreview = { x, y };
+                    } else if (this.mode === 'hit' && !ag.isVirtual) {
+                        this.hitPreview = { x, y };
+                    } else if (this.mode === 'adjust' && !ag.isVirtual) {
+                        const hit = ag.hits.find(h => Math.hypot(h.x - x, h.y - y) < 20);
+                        if (hit) this.draggingHit = hit;
+                    }
+                    this.draw();
+                }
+
+                onPointerMove(e) {
+                    if (this.viewMode === 'result' || !this.isPointerDown) return;
+                    e.preventDefault();
+                    const { x, y } = this.getCanvasCoords(e);
+                    this.lastPointerCoords = { x, y };
+                    this.updateLoupe(x, y);
+
+                    if (this.mode === 'crop' && this.cropStart) {
+                        this.cropRect = {
+                            x: Math.min(x, this.cropStart.x),
+                            y: Math.min(y, this.cropStart.y),
+                            w: Math.abs(x - this.cropStart.x),
+                            h: Math.abs(y - this.cropStart.y)
+                        };
+                    } else if (this.mode === 'adjust' && this.draggingHit) {
+                        this.draggingHit.x = x;
+                        this.draggingHit.y = y;
+                    } else if (this.mode === 'hit' && this.hitPreview) {
+                        this.hitPreview = { x, y };
+                    } else if (this.mode === 'scale' && this.scalePreview) {
+                        this.scalePreview = { x, y };
+                    } else if (this.mode === 'poa' && this.poaPreview) {
+                        this.poaPreview = { x, y };
+                    }
+                    this.draw();
+                }
+
+                onPointerUp(e) {
+                    if (this.pointerId !== e.pointerId) return;
+                    this.canvas.releasePointerCapture(e.pointerId);
+                    this.pointerId = null;
+                    this.isPointerDown = false;
+                    this.hideLoupe();
+                    const ag = this.activeGroup;
+                    if (!ag) return;
+
+                    if (this.mode === 'crop' && this.cropRect && this.cropRect.w > 10) {
+                        this.finalizeCrop();
+                    } else if (this.mode === 'scale' && this.scalePreview && !ag.isVirtual) {
+                        if (!ag.scale.p1) {
+                            ag.scale.p1 = { x: this.scalePreview.x, y: this.scalePreview.y };
+                        } else if (!ag.scale.p2) {
+                            ag.scale.p2 = { x: this.scalePreview.x, y: this.scalePreview.y };
+                            document.getElementById('scale-dist-input').value = document.getElementById('refMm').value;
+                            document.getElementById('scale-confirm').classList.remove('hidden');
+                        } else {
+                            ag.scale.p1 = { x: this.scalePreview.x, y: this.scalePreview.y };
+                            ag.scale.p2 = null;
+                            ag.scaleConfirmed = false;
+                        }
+                    } else if (this.mode === 'poa' && this.poaPreview && !ag.isVirtual) {
+                        ag.poa = { x: this.poaPreview.x, y: this.poaPreview.y };
+                    } else if (this.mode === 'hit' && this.hitPreview && !ag.isVirtual) {
+                        ag.hits.push({ x: this.hitPreview.x, y: this.hitPreview.y });
+                        this.renderUI();
+                    } else if (this.mode === 'adjust' && this.draggingHit) {
+                        this.draggingHit = null;
+                    }
+
+                    this.cropStart = null;
+                    this.draggingHit = null;
+                    this.hitPreview = null;
+                    this.scalePreview = null;
+                    this.poaPreview = null;
+                    if (this.wizardActive) this.updateWizardUI();
+                    this.draw();
+                }
+
+                onPointerLeave() {
+                    if (this.isPointerDown) {
+                        this.isPointerDown = false;
+                        this.hideLoupe();
+                        this.hitPreview = null;
+                        this.scalePreview = null;
+                        this.poaPreview = null;
+                        this.cropStart = null;
+                        this.cropRect = null;
+                        this.draggingHit = null;
+                        if (this.pointerId) {
+                            this.canvas.releasePointerCapture(this.pointerId);
+                            this.pointerId = null;
+                        }
+                        this.draw();
+                    }
+                }
+
+                onDblClick(e) {
+                    if (!this.croppedImg || this.viewMode === 'result') return;
+                    e.preventDefault();
+                    const { x, y } = this.getCanvasCoords(e);
+                    const ag = this.activeGroup;
+                    if (ag && !ag.isVirtual && this.mode === 'hit') {
+                        ag.hits.push({ x, y });
+                        this.draw();
+                        this.renderUI();
+                        if (this.wizardActive) this.updateWizardUI();
+                    }
+                }
+
+                updateLoupe(canvasX, canvasY) {
+                    const sourceSize = this.loupeCanvas.width / this.loupeZoom;
+                    const halfSource = sourceSize / 2;
+                    const sx = canvasX - halfSource;
+                    const sy = canvasY - halfSource;
+                    this.loupeCtx.save();
+                    this.loupeCtx.beginPath();
+                    this.loupeCtx.arc(this.loupeCanvas.width/2, this.loupeCanvas.height/2, this.loupeCanvas.width/2, 0, Math.PI*2);
+                    this.loupeCtx.clip();
+                    this.loupeCtx.drawImage(this.canvas, sx, sy, sourceSize, sourceSize, 0, 0, this.loupeCanvas.width, this.loupeCanvas.height);
+                    this.loupeCtx.strokeStyle = 'rgba(255,0,0,0.8)';
+                    this.loupeCtx.lineWidth = 2;
+                    this.loupeCtx.beginPath();
+                    this.loupeCtx.moveTo(this.loupeCanvas.width/2 - 5, this.loupeCanvas.height/2);
+                    this.loupeCtx.lineTo(this.loupeCanvas.width/2 + 5, this.loupeCanvas.height/2);
+                    this.loupeCtx.moveTo(this.loupeCanvas.width/2, this.loupeCanvas.height/2 - 5);
+                    this.loupeCtx.lineTo(this.loupeCanvas.width/2, this.loupeCanvas.height/2 + 5);
+                    this.loupeCtx.stroke();
+                    this.loupeCtx.restore();
+                    const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+                    const canvasRect = this.canvas.getBoundingClientRect();
+                    const fingerXInContainer = canvasX + canvasRect.left - containerRect.left;
+                    const fingerYInContainer = canvasY + canvasRect.top - containerRect.top;
+                    this.loupe.style.left = (fingerXInContainer - 50) + 'px';
+                    this.loupe.style.top = (fingerYInContainer - 70) + 'px';
+                    this.loupe.style.display = 'block';
+                }
+                hideLoupe() { this.loupe.style.display = 'none'; }
+
+                saveSession() {
+                    this.groups.forEach(g => { if (g) delete g.scaleConfirmed; });
+                    const data = { version: "6.48", timestamp: Date.now(), distance: document.getElementById('distance').value, refMm: document.getElementById('refMm').value, caliber: document.getElementById('caliber').value, groups: this.groups };
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ShotAnalyst_Export.json`; a.click();
+                    this.groups.forEach(g => { g.scaleConfirmed = g.scaleConfirmed || false; });
+                }
+                loadSession(input) {
+                    const file = input.files[0]; if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            document.getElementById('distance').value = data.distance;
+                            document.getElementById('refMm').value = data.refMm;
+                            document.getElementById('caliber').value = data.caliber;
+                            this.groups = data.groups.map(g => ({ ...g, scaleConfirmed: true }));
+                            this.draw(); this.renderUI();
+                            if (this.croppedImg) { this.startWizard(); }
+                        } catch (err) { console.error("Ladefehler", err); }
+                    };
+                    reader.readAsText(file); input.value = "";
+                }
+                loadImage(e) {
+                    const file = e.target.files[0]; if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const tempImg = new Image();
+                        tempImg.onload = () => {
+                            this.currentContextId = Date.now();
+                            this.originalImg = tempImg; this.croppedImg = tempImg; this.imageHistory = [];
+                            this.draggingHit = null; this.cropRect = null; this.cropStart = null;
+                            this.groups.forEach(g => g.selected = false);
+                            if (this.groups.some(g => g.hits.length > 0)) this.addGroup();
+                            else if (this.activeGroup) {
+                                this.activeGroup.scale = { p1: null, p2: null };
+                                this.activeGroup.scaleConfirmed = false;
+                                this.activeGroup.poa = null;
+                                this.activeGroup.contextId = this.currentContextId;
+                            }
+                            this.resizeCanvas(); this.draw(); this.renderUI();
+                            e.target.value = "";
+                            if (this.wizardActive && this.wizardStep === 1) {
+                                this.wizardStep = 2;
+                                this.setModeForStep(this.wizardStep);
+                                this.updateWizardUI();
+                            } else if (!this.wizardActive) {
+                                this.startWizard();
+                            }
+                        };
+                        tempImg.src = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+                resetCrop() {
+                    if (this.originalImg) {
+                        this.currentContextId = Date.now();
+                        this.croppedImg = this.originalImg; this.imageHistory = [];
+                        if (this.activeGroup) {
+                            this.activeGroup.scale = { p1: null, p2: null };
+                            this.activeGroup.scaleConfirmed = false;
+                            this.activeGroup.poa = null;
+                            this.activeGroup.contextId = this.currentContextId;
+                        }
+                        this.resizeCanvas(); this.draw(); this.renderUI();
+                    }
+                }
+                updateZoom(val) { this.resultZoom = parseFloat(val); document.getElementById('zoom-val').innerText = this.resultZoom.toFixed(1); if (this.viewMode === 'result') this.drawResult(); }
+                startStatsDrag(e) { if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return; this.isDraggingStats = true; this.dragOffset.x = e.clientX - this.statsPanel.offsetLeft; this.dragOffset.y = e.clientY - this.statsPanel.offsetTop; this.statsPanel.setPointerCapture(e.pointerId); }
+                doStatsDrag(e) { if (!this.isDraggingStats) return; this.statsPanel.style.left = `${e.clientX - this.dragOffset.x}px`; this.statsPanel.style.top = `${e.clientY - this.dragOffset.y}px`; this.statsPanel.style.right = 'auto'; }
+                stopStatsDrag() { this.isDraggingStats = false; }
+                resizeCanvas() {
+                    if (!this.croppedImg) return;
+                    const container = document.querySelector('main');
+                    const maxWidth = container.clientWidth * 0.98;
+                    const maxHeight = container.clientHeight * 0.9;
+                    let w = this.croppedImg.width, h = this.croppedImg.height, ratio = w/h;
+                    if (w > maxWidth) { w = maxWidth; h = w / ratio; }
+                    if (h > maxHeight) { h = maxHeight; w = h * ratio; }
+                    this.canvas.width = w; this.canvas.height = h;
+                }
+                finalizeCrop() {
+                    this.imageHistory.push(this.croppedImg);
+                    this.currentContextId = Date.now();
+                    const off = document.createElement('canvas');
+                    off.width = this.cropRect.w * (this.croppedImg.width / this.canvas.width);
+                    off.height = this.cropRect.h * (this.croppedImg.height / this.canvas.height);
+                    const octx = off.getContext('2d');
+                    octx.drawImage(this.canvas, this.cropRect.x, this.cropRect.y, this.cropRect.w, this.cropRect.h, 0, 0, off.width, off.height);
+                    const ni = new Image();
+                    ni.onload = () => {
+                        this.croppedImg = ni; this.cropRect = null;
+                        if (this.activeGroup) this.activeGroup.contextId = this.currentContextId;
+                        this.resizeCanvas(); this.draw(); this.renderUI();
+                        if (this.wizardActive) this.updateWizardUI();
+                    };
+                    ni.src = off.toDataURL();
+                }
+                toggleView() {
+                    this.viewMode = (this.viewMode === 'analysis') ? 'result' : 'analysis';
+                    if (this.viewMode === 'result') {
+                        document.getElementById('view-result').classList.remove('hidden');
+                        document.getElementById('canvas-container').style.display = 'none';
+                        document.getElementById('toggleViewBtn').innerText = 'Zurück zur Analyse';
+                        this.drawResult();
+                    } else {
+                        document.getElementById('view-result').classList.add('hidden');
+                        document.getElementById('canvas-container').style.display = '';
+                        document.getElementById('toggleViewBtn').innerText = 'Analysebericht';
+                    }
+                }
+                addGroup() {
+                    this.groups.forEach(g => g.active = false);
+                    this.groups.push({
+                        id: Date.now(),
+                        contextId: this.currentContextId,
+                        name: `Gruppe ${this.groups.length+1}`,
+                        hits: [],
+                        poa: null,
+                        active: true,
+                        selected: false,
+                        isVirtual: false,
+                        scale: { p1: null, p2: null },
+                        scaleConfirmed: false
+                    });
+                    this.draw(); this.renderUI();
+                }
+                selectGroup(id) { this.groups.forEach(g => g.active = (g.id === id)); this.draw(); this.renderUI(); }
+                toggleSelection(id) { const g = this.groups.find(x => x.id === id); if (g) g.selected = !g.selected; this.renderUI(); }
+                requestMerge() {
+                    const selected = this.groups.filter(g => g.selected);
+                    const invalid = selected.filter(g => !g.isVirtual && (!g.poa || !this.getGroupMmp(g)));
+                    const modal = document.getElementById('merge-confirm');
+                    const msg = document.getElementById('merge-msg');
+                    const actions = document.getElementById('merge-actions');
+                    if (selected.length < 2) {
+                        msg.innerHTML = `<span class="text-red-600 font-bold">Fehler:</span><br>Bitte mindestens zwei Gruppen auswählen.`;
+                        actions.innerHTML = `<button onclick="document.getElementById('merge-confirm').classList.add('hidden')" class="bg-zinc-200 text-zinc-700 px-4 py-2 text-xs font-bold rounded">OK</button>`;
+                    } else if (invalid.length > 0) {
+                        msg.innerHTML = `<span class="text-red-600 font-bold">Fehler:</span><br>Einige Gruppen (${invalid.map(x=>x.name).join(', ')}) haben keine Skalierung oder keinen Haltepunkt.`;
+                        actions.innerHTML = `<button onclick="document.getElementById('merge-confirm').classList.add('hidden')" class="bg-zinc-200 text-zinc-700 px-4 py-2 text-xs font-bold rounded">OK</button>`;
+                    } else {
+                        msg.innerText = `Aus den ${selected.length} selektierten Gruppen eine Verbundgruppe erstellen?`;
+                        actions.innerHTML = `<button onclick="app.finalizeMerge()" class="bg-red-600 text-white px-4 py-2 text-xs font-bold rounded">Erstellen</button>
+                                             <button onclick="document.getElementById('merge-confirm').classList.add('hidden')" class="bg-zinc-200 text-zinc-700 px-4 py-2 text-xs font-bold rounded">Abbrechen</button>`;
+                    }
+                    modal.classList.remove('hidden');
+                }
+                finalizeMerge() {
+                    const selectedGroups = this.groups.filter(g => g.selected);
+                    const transformedHits = selectedGroups.flatMap(g => {
+                        if (g.isVirtual) return g.hits;
+                        const mmp = this.getGroupMmp(g);
+                        const poa = g.poa;
+                        return g.hits.map(h => ({ x: (h.x - poa.x) * mmp, y: (poa.y - h.y) * mmp, isMetric: true }));
+                    });
+                    const virtualGroup = { id: Date.now(), contextId: null, name: `Verbund (${selectedGroups.length} El.)`, hits: transformedHits, poa: { x: 0, y: 0 }, active: true, selected: false, isVirtual: true, scale: null, scaleConfirmed: true };
+                    this.groups.forEach(g => { g.active = false; g.selected = false; });
+                    this.groups.push(virtualGroup);
+                    document.getElementById('merge-confirm').classList.add('hidden');
+                    this.draw(); this.renderUI();
+                }
+                calculateStats(hits, group) {
+                    if (!hits || hits.length < 2) return null;
+                    const isMetric = group.isVirtual;
+                    const mmp = isMetric ? 1 : (this.getGroupMmp(group) || 1);
+                    const distM = parseFloat(document.getElementById('distance').value) || 100;
+                    const coi = { x: hits.reduce((a,b)=>a+b.x,0)/hits.length, y: hits.reduce((a,b)=>a+b.y,0)/hits.length };
+                    const moaFactor = distM * 0.290888;
+                    let es = 0, esP1 = null, esP2 = null;
+                    for(let i=0; i<hits.length; i++) {
+                        for(let j=i+1; j<hits.length; j++) {
+                            let d = Math.hypot(hits[i].x-hits[j].x, hits[i].y-hits[j].y);
+                            if(d > es) { es = d; esP1 = hits[i]; esP2 = hits[j]; }
+                        }
+                    }
+                    const varX = hits.reduce((s, h) => s + Math.pow((h.x - coi.x) * mmp, 2), 0) / (hits.length - 1);
+                    const varY = hits.reduce((s, h) => s + Math.pow((h.y - coi.y) * mmp, 2), 0) / (hits.length - 1);
+                    const sigma = Math.sqrt((varX + varY) / 2);
+                    const esMm = es * mmp;
+                    const r50 = 1.1774 * sigma;
+                    const r95 = 2.4477 * sigma;
+                    const mr = hits.reduce((s, h) => s + Math.hypot(h.x-coi.x, h.y-coi.y), 0) / hits.length * mmp;
+                    let minX, maxX, minY, maxY;
+                    hits.forEach(h => {
+                        if (minX === undefined) { minX = maxX = h.x; minY = maxY = h.y; }
+                        minX = Math.min(minX, h.x); maxX = Math.max(maxX, h.x);
+                        minY = Math.min(minY, h.y); maxY = Math.max(maxY, h.y);
+                    });
+                    const outline = { minX, maxX, minY, maxY, w: maxX - minX, h: maxY - minY };
+                    const wMm = outline.w * mmp, hMm = outline.h * mmp;
+                    const dx = isMetric ? coi.x : (group.poa ? (coi.x - group.poa.x) * mmp : 0);
+                    const dy = isMetric ? coi.y : (group.poa ? (group.poa.y - coi.y) * mmp : 0);
+                    const vector = `X:${dx > 0 ? '+' : ''}${dx.toFixed(1)} / Y:${dy > 0 ? '+' : ''}${dy.toFixed(1)} mm`;
+                    const mmC = distM * 0.1;
+                    const clicks = `${dy > 0 ? 'D' : 'U'}${Math.abs(Math.round(dy/mmC))} / ${dx > 0 ? 'L' : 'R'}${Math.abs(Math.round(dx/mmC))}`;
+                    return { es: esMm.toFixed(2), esMoa: (esMm/moaFactor).toFixed(3), mr: mr.toFixed(2), sa: sigma.toFixed(2), saMoa: (sigma/moaFactor).toFixed(3), r50: r50.toFixed(2), r95: r95.toFixed(2), vector, clicks, coi, dx, dy, r50val: r50, r95val: r95, outline, wMm: wMm.toFixed(2), hMm: hMm.toFixed(2), esP1, esP2 };
+                }
+                draw() {
+                    if (this.viewMode === 'result') return;
+                    this.ctx.save();
+                    this.ctx.globalAlpha = 1.0;
+                    this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+                    if (this.croppedImg) this.ctx.drawImage(this.croppedImg, 0,0,this.canvas.width,this.canvas.height);
+                    const activeG = this.activeGroup;
+                    if (!activeG) { this.ctx.restore(); return; }
+                    this.groups.forEach(g => {
+                        if (g.isVirtual) return;
+                        if (g.contextId !== this.currentContextId && g.id !== activeG.id) return;
+                        const isActive = (g.id === activeG.id);
+                        const mmp = this.getGroupMmp(g) || 1;
+                        const calP = (parseFloat(document.getElementById('caliber').value) || 5.56) / mmp;
+                        this.ctx.globalAlpha = isActive ? 1.0 : 0.5;
+                        this.ctx.lineWidth = 2.5;
+                        this.ctx.strokeStyle = isActive ? '#dc2626' : '#71717a';
+                        g.hits.forEach((h, i) => {
+                            this.ctx.beginPath(); this.ctx.arc(h.x, h.y, calP/2, 0, Math.PI*2); this.ctx.stroke();
+                            if (isActive) {
+                                this.ctx.fillStyle = '#000000';
+                                this.ctx.font = 'bold 10px Inter';
+                                this.ctx.fillText(i + 1, h.x + calP/2 + 2, h.y - calP/2 - 2);
+                            }
+                        });
+                        if (g.poa) {
+                            this.ctx.lineWidth = 3.0;
+                            this.ctx.strokeStyle = isActive ? '#15803d' : '#52525b';
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(g.poa.x-12, g.poa.y); this.ctx.lineTo(g.poa.x+12, g.poa.y);
+                            this.ctx.moveTo(g.poa.x, g.poa.y-12); this.ctx.lineTo(g.poa.x, g.poa.y+12); this.ctx.stroke();
+                        }
+                        if (isActive && g.hits.length >= 2) {
+                            const s = this.calculateStats(g.hits, g);
+                            if (s) {
+                                if (s.esP1 && s.esP2) {
+                                    this.ctx.beginPath(); this.ctx.setLineDash([5,5]); this.ctx.strokeStyle = 'rgba(153,27,27,0.4)';
+                                    this.ctx.moveTo(s.esP1.x, s.esP1.y); this.ctx.lineTo(s.esP2.x, s.esP2.y); this.ctx.stroke(); this.ctx.setLineDash([]);
+                                }
+                                this.ctx.lineWidth = 2.5; this.ctx.strokeStyle = 'rgba(220,38,38,0.9)'; this.ctx.setLineDash([8,4]);
+                                this.ctx.strokeRect(s.outline.minX, s.outline.minY, s.outline.w, s.outline.h); this.ctx.setLineDash([]);
+                                this.ctx.strokeStyle = 'rgba(8,145,178,0.9)'; this.ctx.lineWidth = 2.0;
+                                this.ctx.beginPath(); this.ctx.arc(s.coi.x, s.coi.y, s.r50val/mmp, 0, Math.PI*2); this.ctx.stroke();
+                                this.ctx.fillStyle = '#0891b2'; this.ctx.beginPath(); this.ctx.arc(s.coi.x, s.coi.y, 4, 0, Math.PI*2); this.ctx.fill();
+                            }
+                        }
+                    });
+
+                    // Preview drawings
+                    if (this.mode === 'hit' && this.hitPreview && !activeG.isVirtual) {
+                        const mmp = this.getGroupMmp(activeG) || 1;
+                        const calP = (parseFloat(document.getElementById('caliber').value) || 5.56) / mmp;
+                        this.ctx.save();
+                        this.ctx.globalAlpha = 0.7;
+                        this.ctx.strokeStyle = '#ea580c';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.setLineDash([4,4]);
+                        this.ctx.beginPath();
+                        this.ctx.arc(this.hitPreview.x, this.hitPreview.y, calP/2, 0, Math.PI*2);
+                        this.ctx.stroke();
+                        this.ctx.restore();
+                    }
+                    if (this.mode === 'scale' && this.scalePreview) {
+                        this.ctx.save();
+                        this.ctx.globalAlpha = 0.8;
+                        this.ctx.fillStyle = '#dc2626';
+                        this.ctx.beginPath();
+                        this.ctx.arc(this.scalePreview.x, this.scalePreview.y, 6, 0, Math.PI*2);
+                        this.ctx.fill();
+                        this.ctx.restore();
+                    }
+                    if (this.mode === 'poa' && this.poaPreview && !activeG.isVirtual) {
+                        // Circular outline for aiming point during definition
+                        this.ctx.save();
+                        this.ctx.globalAlpha = 0.7;
+                        this.ctx.strokeStyle = '#15803d';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.setLineDash([4,4]);
+                        this.ctx.beginPath();
+                        this.ctx.arc(this.poaPreview.x, this.poaPreview.y, 15, 0, Math.PI*2);
+                        this.ctx.stroke();
+                        this.ctx.restore();
+                    }
+
+                    const mmp_active = this.getGroupMmp(activeG);
+                    if (mmp_active && activeG.scale.p1 && activeG.scale.p2 && activeG.scaleConfirmed) {
+                        const gridStep = 10 / mmp_active;
+                        if (gridStep > 4) {
+                            this.ctx.strokeStyle = 'rgba(255,255,255,0.5)'; this.ctx.lineWidth = 1.5; this.ctx.beginPath();
+                            const anchor = activeG.poa || { x:0, y:0 };
+                            for (let x = anchor.x; x < this.canvas.width; x += gridStep) { this.ctx.moveTo(x,0); this.ctx.lineTo(x, this.canvas.height); }
+                            for (let x = anchor.x - gridStep; x > 0; x -= gridStep) { this.ctx.moveTo(x,0); this.ctx.lineTo(x, this.canvas.height); }
+                            for (let y = anchor.y; y < this.canvas.height; y += gridStep) { this.ctx.moveTo(0,y); this.ctx.lineTo(this.canvas.width, y); }
+                            for (let y = anchor.y - gridStep; y > 0; y -= gridStep) { this.ctx.moveTo(0,y); this.ctx.lineTo(this.canvas.width, y); }
+                            this.ctx.stroke();
+                        }
+                    }
+                    if (activeG.scale && activeG.scale.p1) {
+                        this.ctx.lineWidth = 3.0; this.ctx.strokeStyle = '#dc2626'; this.ctx.beginPath();
+                        this.ctx.arc(activeG.scale.p1.x, activeG.scale.p1.y, 5, 0, Math.PI*2);
+                        if (activeG.scale.p2) { this.ctx.lineTo(activeG.scale.p2.x, activeG.scale.p2.y); this.ctx.arc(activeG.scale.p2.x, activeG.scale.p2.y, 5, 0, Math.PI*2); }
+                        this.ctx.stroke();
+                    }
+                    if (this.mode === 'crop' && this.cropRect) {
+                        this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                        this.ctx.fillRect(0,0,this.canvas.width,this.cropRect.y);
+                        this.ctx.fillRect(0,this.cropRect.y+this.cropRect.h, this.canvas.width, this.canvas.height-(this.cropRect.y+this.cropRect.h));
+                        this.ctx.fillRect(0, this.cropRect.y, this.cropRect.x, this.cropRect.h);
+                        this.ctx.fillRect(this.cropRect.x+this.cropRect.w, this.cropRect.y, this.canvas.width-(this.cropRect.x+this.cropRect.w), this.cropRect.h);
+                        this.ctx.strokeStyle = '#dc2626'; this.ctx.lineWidth = 3; this.ctx.setLineDash([12,6]);
+                        this.ctx.strokeRect(this.cropRect.x, this.cropRect.y, this.cropRect.w, this.cropRect.h);
+                        this.ctx.setLineDash([]);
+                    }
+                    this.ctx.restore();
+                    this.updateStats();
+                }
+                updateStats() {
+                    const ag = this.activeGroup; const s = this.calculateStats(ag?.hits || [], ag); const p = this.statsPanel;
+                    if (s) {
+                        p.classList.remove('hidden');
+                        document.getElementById('stats-content').innerHTML = `
+                            <div class="flex justify-between"><span class="text-zinc-500">ES:</span> <span class="font-bold">${s.es} mm (${s.esMoa} MOA)</span></div>
+                            <div class="flex justify-between"><span class="text-zinc-500">B/H:</span> <span class="font-bold">${s.wMm} / ${s.hMm} mm</span></div>
+                            <div class="flex justify-between"><span class="text-zinc-500">MR:</span> <span class="font-bold">${s.mr} mm</span></div>
+                            <div class="flex justify-between text-cyan-700"><span class="font-bold">s:</span> <span class="font-bold">${s.sa} mm (${s.saMoa} MOA)</span></div>
+                            <div class="flex justify-between"><span class="text-zinc-500">R50:</span> <span class="font-bold">${s.r50} mm</span></div>
+                            <div class="flex justify-between"><span class="text-zinc-500">R95:</span> <span class="font-bold">${s.r95} mm</span></div>
+                            <div class="flex justify-between border-t border-zinc-300 pt-1"><span class="text-zinc-500">TP-Lage:</span> <span class="font-bold">${s.vector}</span></div>
+                            <div class="mt-1 text-cyan-800 font-bold border border-cyan-200 py-1 px-2 bg-cyan-50 rounded text-center">Korrektur 0.1 MIL: ${s.clicks}</div>`;
+                    } else p.classList.add('hidden');
+                }
+                drawResult() {
+                    const ctx = this.resCtx; const w = this.resCanvas.width, h = this.resCanvas.height; const center = { x: w/2 - 100, y: h/2 };
+                    ctx.save(); ctx.globalAlpha = 1.0; ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,w,h);
+                    const reportMmScale = this.resultZoom;
+                    const gridSpacing = 10 * reportMmScale;
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)'; ctx.lineWidth = 1; ctx.beginPath();
+                    for (let x = center.x; x < w; x += gridSpacing) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+                    for (let x = center.x - gridSpacing; x > 0; x -= gridSpacing) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+                    for (let y = center.y; y < h; y += gridSpacing) { ctx.moveTo(0, y); ctx.lineTo(w, y); }
+                    for (let y = center.y - gridSpacing; y > 0; y -= gridSpacing) { ctx.moveTo(0, y); ctx.lineTo(w, y); }
+                    ctx.stroke();
+                    ctx.strokeStyle = '#3f3f46'; ctx.lineWidth = 1;
+                    for(let r=50; r<600; r+=50) { ctx.beginPath(); ctx.arc(center.x, center.y, r * reportMmScale, 0, Math.PI*2); ctx.stroke(); }
+                    ctx.strokeStyle = '#166534'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, center.y); ctx.lineTo(center.x*2, center.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(center.x, 0); ctx.lineTo(center.x, h); ctx.stroke();
+                    const g = this.activeGroup; if (!g || g.hits.length === 0) { ctx.restore(); return; }
+                    const s = this.calculateStats(g.hits, g);
+                    const coiX = center.x + s.dx * reportMmScale, coiY = center.y - s.dy * reportMmScale;
+                    const mmp = g.isVirtual ? 1 : (this.getGroupMmp(g) || 1);
+                    const offsetTopBallistic = (g.isVirtual ? s.outline.maxY : (g.poa ? (g.poa.y - s.outline.minY) * mmp : 0));
+                    const offsetLeftBallistic = (g.isVirtual ? s.outline.minX : (g.poa ? (s.outline.minX - g.poa.x) * mmp : 0));
+                    const boxX = center.x + offsetLeftBallistic * reportMmScale, boxY = center.y - offsetTopBallistic * reportMmScale, boxW = s.outline.w * mmp * reportMmScale, boxH = s.outline.h * mmp * reportMmScale;
+                    if (s.esP1 && s.esP2) {
+                        const esP1x = center.x + (g.isVirtual ? s.esP1.x : (s.esP1.x - g.poa.x) * mmp) * reportMmScale;
+                        const esP1y = center.y - (g.isVirtual ? s.esP1.y : (g.poa.y - s.esP1.y) * mmp) * reportMmScale;
+                        const esP2x = center.x + (g.isVirtual ? s.esP2.x : (s.esP2.x - g.poa.x) * mmp) * reportMmScale;
+                        const esP2y = center.y - (g.isVirtual ? s.esP2.y : (g.poa.y - s.esP2.y) * mmp) * reportMmScale;
+                        ctx.beginPath(); ctx.setLineDash([8,8]); ctx.strokeStyle = 'rgba(153,27,27,0.4)'; ctx.lineWidth = 1.5; ctx.moveTo(esP1x, esP1y); ctx.lineTo(esP2x, esP2y); ctx.stroke(); ctx.setLineDash([]);
+                    }
+                    ctx.strokeStyle = 'rgba(185,28,28,0.4)'; ctx.setLineDash([12,6]); ctx.lineWidth = 2.0; ctx.strokeRect(boxX, boxY, boxW, boxH); ctx.setLineDash([]);
+                    ctx.lineWidth = 4.0; ctx.setLineDash([10,8]); ctx.strokeStyle = '#991b1b'; ctx.beginPath(); ctx.arc(coiX, coiY, parseFloat(s.r95) * reportMmScale, 0, Math.PI*2); ctx.stroke();
+                    ctx.strokeStyle = '#0e7490'; ctx.beginPath(); ctx.arc(coiX, coiY, parseFloat(s.r50) * reportMmScale, 0, Math.PI*2); ctx.stroke();
+                    ctx.save(); ctx.setLineDash([]); ctx.globalAlpha = 1.0; ctx.fillStyle = '#0e7490'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.0; ctx.beginPath(); ctx.arc(coiX, coiY, 8, 0, Math.PI*2); ctx.fill(); ctx.stroke(); ctx.restore();
+                    const calHalfPx = (parseFloat(document.getElementById('caliber').value)/2) * reportMmScale;
+                    g.hits.forEach((h, i) => {
+                        const hx = center.x + (g.isVirtual ? h.x : (h.x - g.poa.x) * mmp) * reportMmScale;
+                        const hy = center.y - (g.isVirtual ? h.y : (g.poa.y - h.y) * mmp) * reportMmScale;
+                        ctx.lineWidth = 1.5; ctx.strokeStyle = '#000000'; ctx.fillStyle = 'rgba(185, 28, 28, 0.85)'; ctx.beginPath(); ctx.arc(hx, hy, calHalfPx, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                        ctx.fillStyle = '#000000'; ctx.font = 'bold 12px Inter'; ctx.fillText(i+1, hx + 8, hy - 8);
+                    });
+                    const sx = w - 240, sy = 40; ctx.fillStyle = 'rgba(255,255,255,0.98)'; ctx.fillRect(sx, sy, 220, 640); ctx.strokeStyle = '#27272a'; ctx.strokeRect(sx, sy, 220, 640);
+                    ctx.fillStyle = '#000000'; ctx.font = 'bold 12px Inter'; ctx.fillText("ANALYSEBERICHT", sx + 15, sy + 25);
+                    ctx.fillStyle = '#52525b'; ctx.font = '10px Inter'; ctx.fillText(`Element: ${g.name}`, sx + 15, sy + 50); ctx.fillText(`Stichprobe (n): ${g.hits.length}`, sx + 15, sy + 65);
+                    const report = [ ["Extremstreuung (ES)", s.es + " mm"], ["Breite (H)", s.wMm + " mm"], ["Höhe (V)", s.hMm + " mm"], ["ES in MOA", s.esMoa + " MOA"], ["Mittlerer Radius", s.mr + " mm"], ["Standardabweichung (s)", s.sa + " mm"], ["Streukreis R50", s.r50 + " mm"], ["Streukreis R95", s.r95 + " mm"], ["Treffpunktlage", s.vector] ];
+                    report.forEach((item, i) => { ctx.fillStyle = '#52525b'; ctx.fillText(item[0], sx + 15, sy + 100 + (i*20)); ctx.fillStyle = '#000000'; ctx.textAlign = "right"; ctx.fillText(item[1], sx + 205, sy + 100 + (i*20)); ctx.textAlign = "left"; });
+                    ctx.fillStyle = '#000000'; ctx.font = 'bold 11px Inter'; ctx.fillText("KORREKTUR 0.1 MIL:", sx + 15, sy + 300); ctx.font = 'bold 16px Inter'; ctx.fillText(s.clicks, sx + 15, sy + 320);
+                    ctx.fillStyle = '#000000'; ctx.font = 'bold 11px Inter'; ctx.fillText("LEGENDE", sx + 15, sy + 360);
+                    const leg = [ { t: "Haltepunkt (POA)", c: "#166534", l: false }, { t: "Schwerpunkt (POI)", c: "#0e7490", l: false }, { t: "R50 (Streukreis)", c: "#0e7490", l: true }, { t: "R95 (Streukreis)", c: "#991b1b", l: true } ];
+                    leg.forEach((item, i) => { const ly = sy + 385 + (i * 25); ctx.strokeStyle = item.c; ctx.lineWidth = 2; if(item.l) { ctx.setLineDash([4,2]); ctx.beginPath(); ctx.moveTo(sx+15, ly); ctx.lineTo(sx+35, ly); ctx.stroke(); ctx.setLineDash([]); } else { ctx.beginPath(); ctx.arc(sx+25, ly, 3, 0, Math.PI*2); ctx.stroke(); } ctx.fillStyle = '#52525b'; ctx.font = '9px Inter'; ctx.fillText(item.t, sx + 45, ly + 3); });
+                    ctx.fillStyle = '#a1a1aa'; ctx.font = '9px Inter'; ctx.fillText(`v6.48 | Gitter: 10mm | Zoom: ${this.resultZoom.toFixed(1)}`, sx + 15, sy + 625);
+                    ctx.restore();
+                }
+                savePlot() { if (this.viewMode !== 'result') this.toggleView(); const a = document.createElement('a'); a.download = `Bericht_${this.activeGroup.name}.png`; a.href = this.resCanvas.toDataURL("image/png"); a.click(); }
+                exportCSV() {
+                    let c = "\ufeffName;n;X_mm;Y_mm\n";
+                    this.groups.forEach(g => {
+                        const isMetric = g.isVirtual; const mmp = isMetric ? 1 : (this.getGroupMmp(g) || 1); const poa = g.poa || {x:0, y:0};
+                        g.hits.forEach((h, i) => { const dx = isMetric ? h.x : (h.x - poa.x) * mmp; const dy = isMetric ? h.y : (poa.y - h.y) * mmp; c += `${g.name};${i+1};${dx.toFixed(4).replace('.', ',')};${dy.toFixed(4).replace('.', ',')}\n`; });
+                    });
+                    const blob = new Blob([c], { type: 'text/csv;charset=utf-8;' });
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ShotAnalyst_Export.csv`; a.click();
+                }
+                renderUI() {
+                    const list = document.getElementById('groupList'); list.innerHTML = '';
+                    this.groups.forEach(g => {
+                        const d = document.createElement('div'); d.className = `flex items-center gap-2 p-1 rounded transition ${g.active ? 'bg-red-50 ring-1 ring-red-200' : ''}`;
+                        const label = document.createElement('div'); label.className = `flex-1 p-2 rounded border cursor-pointer flex justify-between items-center ${g.active ? 'border-red-200 bg-red-50 text-red-700' : 'border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-700'}`;
+                        label.onclick = () => this.selectGroup(g.id);
+                        label.innerHTML = `<div class="flex flex-col"><span class="text-xs font-bold">${g.name}</span><span class="text-[9px] uppercase text-zinc-500">${g.hits.length} Treffer</span></div><button onclick="event.stopPropagation(); app.deleteGroup(${g.id})" class="text-zinc-400 hover:text-red-600 px-1 transition-colors">&times;</button>`;
+                        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'w-4 h-4 rounded-full border-zinc-300 text-red-600 focus:ring-red-500'; cb.checked = g.selected; cb.onchange = () => this.toggleSelection(g.id);
+                        d.appendChild(cb); d.appendChild(label); list.appendChild(d);
+                    });
+                    document.getElementById('mergeBtn').classList.toggle('hidden', this.groups.filter(g => g.selected).length < 2);
+                }
+                deleteGroup(id) { if (this.groups.length > 1) { this.groups = this.groups.filter(g => g.id !== id); if (!this.activeGroup) this.groups[0].active = true; this.draw(); this.renderUI(); } }
+                undo() { if (this.activeGroup?.hits.length > 0) this.activeGroup.hits.pop(); else if (this.imageHistory.length > 0) { this.croppedImg = this.imageHistory.pop(); this.resizeCanvas(); } this.draw(); this.renderUI(); }
+            }
+            window.app = new ShotAnalyst();
+        })();
+    </script>
+</body>
+</html>
