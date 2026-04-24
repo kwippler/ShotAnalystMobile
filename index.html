@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ShotAnalyst v6.48 – Mobile</title>
+    <title>ShotAnalyst v1.2 – Mobile</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -148,8 +148,8 @@
         </div>
     </main>
 
-    <!-- Normal bottom mode bar (hidden when wizard active) -->
-    <nav id="mode-bar" class="bg-white border-t border-zinc-200 px-2 py-2 shrink-0 overflow-x-auto flex gap-1 no-cursor">
+    <!-- Bottom mode bar without plus button, lifted -->
+    <nav id="mode-bar" class="bg-white border-t border-zinc-200 px-2 py-2 mb-2 shrink-0 overflow-x-auto flex gap-1 no-cursor">
         <button id="mode-crop" onclick="app.setMode('crop')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Zuschnitt</button>
         <button id="mode-scale" onclick="app.setMode('scale')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Skalierung</button>
         <button id="mode-poa" onclick="app.setMode('poa')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Haltepunkt</button>
@@ -157,7 +157,6 @@
         <button id="mode-adjust" onclick="app.setMode('adjust')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">Justieren</button>
         <button id="mode-remove" onclick="app.setMode('remove')" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">✕ Löschen</button>
         <button onclick="app.undo()" class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-full border border-zinc-300 bg-white text-zinc-700 whitespace-nowrap">↩</button>
-        <button onclick="app.addGroup()" class="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-red-600 text-white rounded-full text-xl font-bold shadow">+</button>
     </nav>
 
     <!-- Wizard bar -->
@@ -170,7 +169,7 @@
         </div>
     </div>
 
-    <!-- Slide-up settings panel -->
+    <!-- Slide-up settings panel (Hamburger) -->
     <div class="backdrop" id="backdrop"></div>
     <div class="slide-up-panel" id="settingsPanel">
         <div class="flex justify-between items-center mb-4">
@@ -187,7 +186,7 @@
         </section>
         <section class="mb-4">
             <h3 class="text-sm font-semibold text-zinc-500 uppercase mb-2">Bild & Parameter</h3>
-            <button onclick="app.requestImageLoad()" class="w-full bg-white hover:bg-zinc-100 text-zinc-700 text-sm py-2 rounded border border-zinc-300 font-bold mb-2">Bild importieren</button>
+            <button onclick="app.requestImageLoad(); closeSettings()" class="w-full bg-white hover:bg-zinc-100 text-zinc-700 text-sm py-2 rounded border border-zinc-300 font-bold mb-2">Bild importieren</button>
             <input type="file" id="fileInput" class="hidden" accept="image/*">
             <div class="grid grid-cols-2 gap-2 mb-2">
                 <div>
@@ -211,9 +210,9 @@
             <button onclick="app.requestMerge()" id="mergeBtn" class="mt-2 w-full border border-red-300 bg-red-50 text-xs py-2 rounded text-red-600 font-bold hidden">Verbund generieren</button>
         </section>
         <section class="grid grid-cols-2 gap-2 mb-4">
-            <button id="toggleViewBtn" onclick="app.toggleView()" class="bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold py-3 rounded">Analysebericht</button>
-            <button onclick="app.exportCSV()" class="bg-white hover:bg-zinc-100 text-zinc-700 text-xs py-3 rounded border border-zinc-300 font-bold">CSV Export</button>
-            <button onclick="app.savePlot()" class="col-span-2 bg-red-600 hover:bg-red-700 text-white text-sm py-3 rounded font-bold uppercase">Bericht speichern</button>
+            <button id="toggleViewBtn" onclick="app.toggleView(); closeSettings()" class="bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold py-3 rounded">Analysebericht</button>
+            <button onclick="app.exportCSV(); closeSettings()" class="bg-white hover:bg-zinc-100 text-zinc-700 text-xs py-3 rounded border border-zinc-300 font-bold">CSV Export</button>
+            <button onclick="app.savePlot(); closeSettings()" class="col-span-2 bg-red-600 hover:bg-red-700 text-white text-sm py-3 rounded font-bold uppercase">Bericht speichern</button>
         </section>
     </div>
 
@@ -544,7 +543,6 @@
                         const hit = ag.hits.find(h => Math.hypot(h.x - x, h.y - y) < 20);
                         if (hit) this.draggingHit = hit;
                     } else if (this.mode === 'remove' && !ag.isVirtual) {
-                        // Find hit under finger
                         const hitIndex = ag.hits.findIndex(h => Math.hypot(h.x - x, h.y - y) < 20);
                         if (hitIndex !== -1) {
                             ag.hits.splice(hitIndex, 1);
@@ -929,7 +927,6 @@
                         }
                     });
 
-                    // Preview drawings
                     if (this.mode === 'hit' && this.hitPreview && !activeG.isVirtual) {
                         const mmp = this.getGroupMmp(activeG) || 1;
                         const calP = (parseFloat(document.getElementById('caliber').value) || 5.56) / mmp;
